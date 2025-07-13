@@ -56,7 +56,7 @@ class ETAContentScript {
     try {
       this.invoiceData = [];
       
-      // Extract pagination info
+      // Extract pagination info first
       this.extractPaginationInfo();
       
       // Find invoice rows using the exact selectors from the HTML
@@ -91,7 +91,10 @@ class ETAContentScript {
       // Extract current page - exact selector from HTML
       const currentPageBtn = document.querySelector('.eta-pageNumber.is-checked');
       if (currentPageBtn) {
-        this.currentPage = parseInt(currentPageBtn.textContent) || 1;
+        const pageLabel = currentPageBtn.querySelector('.ms-Button-label');
+        if (pageLabel) {
+          this.currentPage = parseInt(pageLabel.textContent) || 1;
+        }
       }
       
       // Calculate total pages (10 items per page based on the HTML structure)
@@ -155,12 +158,14 @@ class ETAContentScript {
       
       // Cell 0: Electronic Number and Internal Number (data-automation-key="uuid")
       const uuidCell = cells[0];
-      if (uuidCell) {
+      if (uuidCell && uuidCell.getAttribute('data-automation-key') === 'uuid') {
+        // Extract electronic number from the link
         const electronicLink = uuidCell.querySelector('.internalId-link a.griCellTitle');
         if (electronicLink) {
           invoice.electronicNumber = electronicLink.textContent?.trim() || '';
         }
         
+        // Extract internal number from subtitle
         const internalNumberElement = uuidCell.querySelector('.griCellSubTitle');
         if (internalNumberElement) {
           invoice.internalNumber = internalNumberElement.textContent?.trim() || '';
@@ -169,7 +174,7 @@ class ETAContentScript {
       
       // Cell 1: Date and Time (data-automation-key="dateTimeReceived")
       const dateCell = cells[1];
-      if (dateCell) {
+      if (dateCell && dateCell.getAttribute('data-automation-key') === 'dateTimeReceived') {
         const dateElement = dateCell.querySelector('.griCellTitleGray');
         const timeElement = dateCell.querySelector('.griCellSubTitle');
         
@@ -183,7 +188,7 @@ class ETAContentScript {
       
       // Cell 2: Document Type and Version (data-automation-key="typeName")
       const typeCell = cells[2];
-      if (typeCell) {
+      if (typeCell && typeCell.getAttribute('data-automation-key') === 'typeName') {
         const typeElement = typeCell.querySelector('.griCellTitleGray');
         const versionElement = typeCell.querySelector('.griCellSubTitle');
         
@@ -197,7 +202,7 @@ class ETAContentScript {
       
       // Cell 3: Total Amount (data-automation-key="total")
       const totalCell = cells[3];
-      if (totalCell) {
+      if (totalCell && totalCell.getAttribute('data-automation-key') === 'total') {
         const totalElement = totalCell.querySelector('.griCellTitleGray');
         if (totalElement) {
           invoice.totalAmount = totalElement.textContent?.trim() || '';
@@ -208,7 +213,7 @@ class ETAContentScript {
       
       // Cell 4: Seller/Issuer Information (data-automation-key="issuerName")
       const issuerCell = cells[4];
-      if (issuerCell) {
+      if (issuerCell && issuerCell.getAttribute('data-automation-key') === 'issuerName') {
         const sellerNameElement = issuerCell.querySelector('.griCellTitleGray');
         const sellerTaxElement = issuerCell.querySelector('.griCellSubTitle');
         
@@ -222,7 +227,7 @@ class ETAContentScript {
       
       // Cell 5: Buyer/Receiver Information (data-automation-key="receiverName")
       const receiverCell = cells[5];
-      if (receiverCell) {
+      if (receiverCell && receiverCell.getAttribute('data-automation-key') === 'receiverName') {
         const buyerNameElement = receiverCell.querySelector('.griCellTitleGray');
         const buyerTaxElement = receiverCell.querySelector('.griCellSubTitle');
         
@@ -236,7 +241,7 @@ class ETAContentScript {
       
       // Cell 6: Submission ID (data-automation-key="submission")
       const submissionCell = cells[6];
-      if (submissionCell) {
+      if (submissionCell && submissionCell.getAttribute('data-automation-key') === 'submission') {
         const submissionLink = submissionCell.querySelector('a.submissionId-link');
         if (submissionLink) {
           invoice.submissionId = submissionLink.textContent?.trim() || '';
@@ -246,21 +251,25 @@ class ETAContentScript {
       
       // Cell 7: Status (data-automation-key="status")
       const statusCell = cells[7];
-      if (statusCell) {
-        // Handle different status types
-        const validStatus = statusCell.querySelector('.status-Valid');
-        const rejectedStatus = statusCell.querySelector('.status-Rejected');
-        const textStatus = statusCell.querySelector('.textStatus');
-        
-        if (validStatus && rejectedStatus) {
+      if (statusCell && statusCell.getAttribute('data-automation-key') === 'status') {
+        // Handle different status types exactly as in HTML
+        const validRejectedDiv = statusCell.querySelector('.horizontal.valid-rejected');
+        if (validRejectedDiv) {
           // Complex status: Valid → Rejected
-          invoice.status = 'صحيح → مرفوض';
-        } else if (textStatus) {
-          // Simple status
-          invoice.status = textStatus.textContent?.trim() || '';
+          const validStatus = validRejectedDiv.querySelector('.status-Valid');
+          const rejectedStatus = validRejectedDiv.querySelector('.status-Rejected');
+          if (validStatus && rejectedStatus) {
+            invoice.status = `${validStatus.textContent?.trim()} → ${rejectedStatus.textContent?.trim()}`;
+          }
         } else {
-          // Fallback to any text content
-          invoice.status = statusCell.textContent?.trim() || '';
+          // Simple status
+          const textStatus = statusCell.querySelector('.textStatus');
+          if (textStatus) {
+            invoice.status = textStatus.textContent?.trim() || '';
+          } else {
+            // Fallback to any text content
+            invoice.status = statusCell.textContent?.trim() || '';
+          }
         }
       }
       
@@ -389,7 +398,6 @@ class ETAContentScript {
   async navigateToPage(pageNumber) {
     try {
       // Look for page number button using exact selector from HTML
-      const pageButton = document.querySelector(`.eta-pageNumber[data-is-focusable="true"]`);
       const pageButtons = document.querySelectorAll('.eta-pageNumber');
       
       // Find the specific page button
@@ -486,7 +494,7 @@ class ETAContentScript {
   }
   
   async extractInvoiceDetailsFromPage(invoiceId) {
-    // This method would extract line items from the invoice details page
+    // This method extracts line items from the invoice details page
     // Based on the second image showing the detailed view with columns:
     // كود الصنف, إسم الكود, الوصف, الكمية, كود الوحدة, إسم الوحدة, السعر, القيمة, ضريبة القيمة المضافة, الإجمالي
     
