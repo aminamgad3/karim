@@ -1,4 +1,4 @@
-// Content script for ETA Invoice Exporter with complete column mapping
+// Content script for ETA Invoice Exporter with exact data extraction matching the portal structure
 class ETAContentScript {
   constructor() {
     this.invoiceData = [];
@@ -59,7 +59,7 @@ class ETAContentScript {
       // Extract pagination info
       this.extractPaginationInfo();
       
-      // Find invoice rows using the correct selectors
+      // Find invoice rows using the exact selectors from the HTML
       const rows = document.querySelectorAll('.ms-DetailsRow[role="row"]');
       console.log(`ETA Exporter: Found ${rows.length} invoice rows on page ${this.currentPage}`);
       
@@ -79,34 +79,23 @@ class ETAContentScript {
   
   extractPaginationInfo() {
     try {
-      // Extract total count from pagination
+      // Extract total count from pagination - exact selector from HTML
       const totalLabel = document.querySelector('.eta-pagination-totalrecordCount-label');
       if (totalLabel) {
-        const match = totalLabel.textContent.match(/(\d+)/);
+        const match = totalLabel.textContent.match(/النتائج:\s*(\d+)/);
         if (match) {
           this.totalCount = parseInt(match[1]);
         }
       }
       
-      // Alternative selectors for total count
-      if (!this.totalCount) {
-        const paginationText = document.querySelector('[class*="pagination"]');
-        if (paginationText) {
-          const match = paginationText.textContent.match(/(\d+)\s*(?:من|of|total)/i);
-          if (match) {
-            this.totalCount = parseInt(match[1]);
-          }
-        }
-      }
-      
-      // Extract current page
-      const currentPageBtn = document.querySelector('.eta-pageNumber.is-checked, .ms-Button--primary[aria-pressed="true"]');
+      // Extract current page - exact selector from HTML
+      const currentPageBtn = document.querySelector('.eta-pageNumber.is-checked');
       if (currentPageBtn) {
         this.currentPage = parseInt(currentPageBtn.textContent) || 1;
       }
       
-      // Calculate total pages (assuming 10 items per page by default)
-      const itemsPerPage = this.invoiceData.length || 10;
+      // Calculate total pages (10 items per page based on the HTML structure)
+      const itemsPerPage = 10;
       this.totalPages = Math.ceil(this.totalCount / itemsPerPage);
       
       console.log(`ETA Exporter: Page ${this.currentPage} of ${this.totalPages}, Total: ${this.totalCount} invoices`);
@@ -117,92 +106,46 @@ class ETAContentScript {
   }
   
   extractDataFromRow(row, index) {
-    // Complete invoice data structure matching the images exactly
+    // Extract data exactly as shown in the HTML structure
     const invoice = {
       index: index,
-      // Column A: مسلسل (Serial Number)
-      serialNumber: index,
+      pageNumber: this.currentPage,
       
-      // Column B: تفاصيل (Details - View button)
-      detailsButton: 'عرض',
-      
-      // Column C: نوع المستند (Document Type)
+      // Main invoice data from the table structure
+      electronicNumber: '',
+      internalNumber: '',
+      issueDate: '',
+      issueTime: '',
       documentType: '',
-      
-      // Column D: نسخة المستند (Document Version)
       documentVersion: '',
-      
-      // Column E: الحالة (Status)
+      totalAmount: '',
+      currency: 'EGP',
+      sellerName: '',
+      sellerTaxNumber: '',
+      buyerName: '',
+      buyerTaxNumber: '',
+      submissionId: '',
       status: '',
       
-      // Column F: تاريخ الإصدار (Issue Date)
-      issueDate: '',
-      
-      // Column G: تاريخ التقديم (Submission Date)
-      submissionDate: '',
-      
-      // Column H: عملة الفاتورة (Invoice Currency)
-      invoiceCurrency: '',
-      
-      // Column I: قيمة الفاتورة (Invoice Value)
+      // Additional calculated fields
       invoiceValue: '',
-      
-      // Column J: ضريبة القيمة المضافة (VAT)
       vatAmount: '',
-      
-      // Column K: الخصم تحت حساب الضريبة (Tax Discount)
-      taxDiscount: '',
-      
-      // Column L: إجمالي الفاتورة (Total Invoice)
       totalInvoice: '',
       
-      // Column M: الرقم الداخلي (Internal Number)
-      internalNumber: '',
-      
-      // Column N: الرقم الإلكتروني (Electronic Number)
-      electronicNumber: '',
-      
-      // Column O: الرقم الضريبي للبائع (Seller Tax Number)
-      sellerTaxNumber: '',
-      
-      // Column P: اسم البائع (Seller Name)
-      sellerName: '',
-      
-      // Column Q: عنوان البائع (Seller Address)
+      // Default values for missing fields
+      taxDiscount: '0',
       sellerAddress: '',
-      
-      // Column R: الرقم الضريبي للمشتري (Buyer Tax Number)
-      buyerTaxNumber: '',
-      
-      // Column S: اسم المشتري (Buyer Name)
-      buyerName: '',
-      
-      // Column T: عنوان المشتري (Buyer Address)
       buyerAddress: '',
-      
-      // Column U: مرجع طلب الشراء (Purchase Order Reference)
       purchaseOrderRef: '',
-      
-      // Column V: وصف طلب الشراء (Purchase Order Description)
       purchaseOrderDesc: '',
-      
-      // Column W: مرجع طلب المبيعات (Sales Order Reference)
       salesOrderRef: '',
-      
-      // Column X: التوقيع الإلكتروني (Electronic Signature)
-      electronicSignature: '',
-      
-      // Column Y: دليل الغذاء والدواء ومستلزمات المطاعم (Food, Drug & Restaurant Supplies Guide)
+      electronicSignature: 'موقع إلكترونياً',
       foodDrugGuide: '',
-      
-      // Column Z: الرابط الخارجي (External Link)
-      externalLink: '',
-      
-      // Additional info
-      pageNumber: this.currentPage
+      externalLink: ''
     };
     
     try {
+      // Get all cells in the row - exact structure from HTML
       const cells = row.querySelectorAll('.ms-DetailsRow-cell');
       
       if (cells.length === 0) {
@@ -210,154 +153,138 @@ class ETAContentScript {
         return invoice;
       }
       
-      // Extract data from each cell based on the actual structure
-      // Cell 0: Document ID and Internal ID
-      const idCell = cells[0];
-      if (idCell) {
-        const electronicIdLink = idCell.querySelector('.internalId-link a');
-        if (electronicIdLink) {
-          invoice.electronicNumber = electronicIdLink.textContent?.trim() || '';
+      // Cell 0: Electronic Number and Internal Number (data-automation-key="uuid")
+      const uuidCell = cells[0];
+      if (uuidCell) {
+        const electronicLink = uuidCell.querySelector('.internalId-link a.griCellTitle');
+        if (electronicLink) {
+          invoice.electronicNumber = electronicLink.textContent?.trim() || '';
         }
         
-        const internalIdElement = idCell.querySelector('.griCellSubTitle');
-        if (internalIdElement) {
-          invoice.internalNumber = internalIdElement.textContent?.trim() || '';
+        const internalNumberElement = uuidCell.querySelector('.griCellSubTitle');
+        if (internalNumberElement) {
+          invoice.internalNumber = internalNumberElement.textContent?.trim() || '';
         }
       }
       
-      // Cell 1: Date Information
+      // Cell 1: Date and Time (data-automation-key="dateTimeReceived")
       const dateCell = cells[1];
       if (dateCell) {
-        const issueDateMain = dateCell.querySelector('.griCellTitleGray');
-        const submissionTime = dateCell.querySelector('.griCellSubTitle');
+        const dateElement = dateCell.querySelector('.griCellTitleGray');
+        const timeElement = dateCell.querySelector('.griCellSubTitle');
         
-        if (issueDateMain) {
-          invoice.issueDate = issueDateMain.textContent?.trim() || '';
-          invoice.submissionDate = invoice.issueDate; // Often the same
+        if (dateElement) {
+          invoice.issueDate = dateElement.textContent?.trim() || '';
         }
-        
-        if (submissionTime && submissionTime.textContent?.trim()) {
-          invoice.issueDate += ` ${submissionTime.textContent.trim()}`;
+        if (timeElement) {
+          invoice.issueTime = timeElement.textContent?.trim() || '';
         }
       }
       
-      // Cell 2: Document Type and Version
+      // Cell 2: Document Type and Version (data-automation-key="typeName")
       const typeCell = cells[2];
       if (typeCell) {
-        const typeMain = typeCell.querySelector('.griCellTitleGray');
-        const versionMain = typeCell.querySelector('.griCellSubTitle');
+        const typeElement = typeCell.querySelector('.griCellTitleGray');
+        const versionElement = typeCell.querySelector('.griCellSubTitle');
         
-        if (typeMain) {
-          invoice.documentType = typeMain.textContent?.trim() || '';
+        if (typeElement) {
+          invoice.documentType = typeElement.textContent?.trim() || '';
         }
-        if (versionMain) {
-          invoice.documentVersion = versionMain.textContent?.trim() || '';
+        if (versionElement) {
+          invoice.documentVersion = versionElement.textContent?.trim() || '';
         }
       }
       
-      // Cell 3: Total Amount and Currency
+      // Cell 3: Total Amount (data-automation-key="total")
       const totalCell = cells[3];
       if (totalCell) {
-        const totalAmount = totalCell.querySelector('.griCellTitleGray');
-        if (totalAmount) {
-          const amountText = totalAmount.textContent?.trim() || '';
-          // Extract currency and amount
-          if (amountText.includes('EGP')) {
-            invoice.invoiceCurrency = 'EGP';
-            invoice.totalInvoice = amountText.replace('EGP', '').trim();
-            invoice.invoiceValue = invoice.totalInvoice;
-          } else {
-            invoice.totalInvoice = amountText;
-            invoice.invoiceValue = amountText;
-            invoice.invoiceCurrency = 'EGP'; // Default
-          }
+        const totalElement = totalCell.querySelector('.griCellTitleGray');
+        if (totalElement) {
+          invoice.totalAmount = totalElement.textContent?.trim() || '';
+          invoice.totalInvoice = invoice.totalAmount;
+          invoice.invoiceValue = invoice.totalAmount;
         }
       }
       
-      // Cell 4: Supplier/Seller Information
-      const supplierCell = cells[4];
-      if (supplierCell) {
-        const supplierName = supplierCell.querySelector('.griCellTitleGray');
-        const supplierTax = supplierCell.querySelector('.griCellSubTitle');
+      // Cell 4: Seller/Issuer Information (data-automation-key="issuerName")
+      const issuerCell = cells[4];
+      if (issuerCell) {
+        const sellerNameElement = issuerCell.querySelector('.griCellTitleGray');
+        const sellerTaxElement = issuerCell.querySelector('.griCellSubTitle');
         
-        if (supplierName) {
-          invoice.sellerName = supplierName.textContent?.trim() || '';
+        if (sellerNameElement) {
+          invoice.sellerName = sellerNameElement.textContent?.trim() || '';
         }
-        if (supplierTax) {
-          invoice.sellerTaxNumber = supplierTax.textContent?.trim() || '';
+        if (sellerTaxElement) {
+          invoice.sellerTaxNumber = sellerTaxElement.textContent?.trim() || '';
         }
       }
       
-      // Cell 5: Receiver/Buyer Information
+      // Cell 5: Buyer/Receiver Information (data-automation-key="receiverName")
       const receiverCell = cells[5];
       if (receiverCell) {
-        const receiverName = receiverCell.querySelector('.griCellTitleGray');
-        const receiverTax = receiverCell.querySelector('.griCellSubTitle');
+        const buyerNameElement = receiverCell.querySelector('.griCellTitleGray');
+        const buyerTaxElement = receiverCell.querySelector('.griCellSubTitle');
         
-        if (receiverName) {
-          invoice.buyerName = receiverName.textContent?.trim() || '';
+        if (buyerNameElement) {
+          invoice.buyerName = buyerNameElement.textContent?.trim() || '';
         }
-        if (receiverTax) {
-          invoice.buyerTaxNumber = receiverTax.textContent?.trim() || '';
+        if (buyerTaxElement) {
+          invoice.buyerTaxNumber = buyerTaxElement.textContent?.trim() || '';
         }
       }
       
-      // Cell 6: Submission ID (if exists)
+      // Cell 6: Submission ID (data-automation-key="submission")
       const submissionCell = cells[6];
       if (submissionCell) {
-        const submissionLink = submissionCell.querySelector('.submissionId-link');
+        const submissionLink = submissionCell.querySelector('a.submissionId-link');
         if (submissionLink) {
-          invoice.purchaseOrderRef = submissionLink.textContent?.trim() || '';
+          invoice.submissionId = submissionLink.textContent?.trim() || '';
+          invoice.purchaseOrderRef = invoice.submissionId;
         }
       }
       
-      // Cell 7: Status
+      // Cell 7: Status (data-automation-key="status")
       const statusCell = cells[7];
       if (statusCell) {
-        const statusText = statusCell.querySelector('.textStatus');
-        if (statusText) {
-          invoice.status = statusText.textContent?.trim() || '';
+        // Handle different status types
+        const validStatus = statusCell.querySelector('.status-Valid');
+        const rejectedStatus = statusCell.querySelector('.status-Rejected');
+        const textStatus = statusCell.querySelector('.textStatus');
+        
+        if (validStatus && rejectedStatus) {
+          // Complex status: Valid → Rejected
+          invoice.status = 'صحيح → مرفوض';
+        } else if (textStatus) {
+          // Simple status
+          invoice.status = textStatus.textContent?.trim() || '';
         } else {
-          // Check for complex status (Valid -> Cancelled)
-          const validStatus = statusCell.querySelector('.status-Valid');
-          const cancelledStatus = statusCell.querySelector('.status-Cancelled');
-          
-          if (validStatus && cancelledStatus) {
-            invoice.status = 'Valid → Cancelled';
-          } else if (validStatus) {
-            invoice.status = 'Valid';
-          } else {
-            // Try to get any status text
-            invoice.status = statusCell.textContent?.trim() || '';
-          }
+          // Fallback to any text content
+          invoice.status = statusCell.textContent?.trim() || '';
         }
       }
       
-      // Try to extract VAT amount (usually calculated as percentage of total)
-      if (invoice.totalInvoice) {
-        const totalValue = parseFloat(invoice.totalInvoice.replace(/,/g, ''));
+      // Calculate VAT amount (assuming 14% VAT rate common in Egypt)
+      if (invoice.totalAmount) {
+        const totalValue = parseFloat(invoice.totalAmount.replace(/[,٬]/g, ''));
         if (!isNaN(totalValue)) {
-          // Estimate VAT as 14% (common rate in Egypt)
+          // Calculate VAT as 14% of the net amount
           invoice.vatAmount = (totalValue * 0.14 / 1.14).toFixed(2);
           invoice.invoiceValue = (totalValue - parseFloat(invoice.vatAmount)).toFixed(2);
         }
       }
       
-      // Set default values for missing fields
-      invoice.taxDiscount = '0';
-      invoice.sellerAddress = invoice.sellerName ? 'غير محدد' : '';
-      invoice.buyerAddress = invoice.buyerName ? 'غير محدد' : '';
-      invoice.purchaseOrderDesc = '';
-      invoice.salesOrderRef = '';
-      invoice.salesOrderDesc = '';
-      invoice.electronicSignature = 'موقع إلكترونياً';
+      // Set default addresses if names are available
+      if (invoice.sellerName && !invoice.sellerAddress) {
+        invoice.sellerAddress = 'غير محدد';
+      }
+      if (invoice.buyerName && !invoice.buyerAddress) {
+        invoice.buyerAddress = 'غير محدد';
+      }
       
-      // Extract shareId from submission link if available
-      if (submissionCell && submissionCell.querySelector('.submissionId-link')) {
-        const submissionLink = submissionCell.querySelector('.submissionId-link');
-        if (submissionLink) {
-          invoice.purchaseOrderRef = submissionLink.textContent?.trim() || '';
-        }
+      // Generate external link for sharing
+      if (invoice.electronicNumber) {
+        invoice.externalLink = this.generateExternalLink(invoice);
       }
       
     } catch (error) {
@@ -367,8 +294,25 @@ class ETAContentScript {
     return invoice;
   }
   
+  generateExternalLink(invoice) {
+    if (!invoice.electronicNumber) {
+      return '';
+    }
+    
+    // Generate share link based on the submission ID or electronic number
+    let shareId = '';
+    if (invoice.submissionId && invoice.submissionId.length > 10) {
+      shareId = invoice.submissionId;
+    } else {
+      // Generate a placeholder shareId based on electronic number
+      shareId = invoice.electronicNumber.replace(/[^A-Z0-9]/g, '').substring(0, 26);
+    }
+    
+    return `https://invoicing.eta.gov.eg/documents/${invoice.electronicNumber}/share/${shareId}`;
+  }
+  
   isValidInvoiceData(invoice) {
-    return !!(invoice.electronicNumber || invoice.internalNumber || invoice.totalInvoice);
+    return !!(invoice.electronicNumber || invoice.internalNumber || invoice.totalAmount);
   }
   
   async getAllPagesData(options = {}) {
@@ -444,30 +388,18 @@ class ETAContentScript {
   
   async navigateToPage(pageNumber) {
     try {
-      // Look for page number button
-      const pageButton = document.querySelector(`[aria-label="Page ${pageNumber}"], .eta-pageNumber[data-page="${pageNumber}"]`);
+      // Look for page number button using exact selector from HTML
+      const pageButton = document.querySelector(`.eta-pageNumber[data-is-focusable="true"]`);
+      const pageButtons = document.querySelectorAll('.eta-pageNumber');
       
-      if (pageButton) {
-        pageButton.click();
-        await this.waitForPageLoad();
-        return true;
-      }
-      
-      // Alternative: look for page input field
-      const pageInput = document.querySelector('input[type="number"][aria-label*="page"], .ms-TextField-field[type="number"]');
-      if (pageInput) {
-        pageInput.value = pageNumber.toString();
-        pageInput.dispatchEvent(new Event('change', { bubbles: true }));
-        pageInput.dispatchEvent(new Event('blur', { bubbles: true }));
-        
-        // Look for go/submit button
-        const goButton = document.querySelector('[aria-label*="Go"], .ms-Button[type="submit"]');
-        if (goButton) {
-          goButton.click();
+      // Find the specific page button
+      for (const btn of pageButtons) {
+        const label = btn.querySelector('.ms-Button-label');
+        if (label && parseInt(label.textContent) === pageNumber) {
+          btn.click();
+          await this.waitForPageLoad();
+          return true;
         }
-        
-        await this.waitForPageLoad();
-        return true;
       }
       
       return false;
@@ -479,22 +411,11 @@ class ETAContentScript {
   
   async navigateToNextPage() {
     try {
-      // Look for next page button
-      const nextButton = document.querySelector(
-        '[aria-label="Next page"], [aria-label="التالي"], .ms-Button[data-automation-id="nextPageButton"], .eta-pageNumber.is-next'
-      );
+      // Look for next page button using exact selector from HTML
+      const nextButton = document.querySelector('[data-icon-name="ChevronRight"]')?.closest('button');
       
-      if (nextButton && !nextButton.disabled) {
+      if (nextButton && !nextButton.disabled && !nextButton.classList.contains('is-disabled')) {
         nextButton.click();
-        return true;
-      }
-      
-      // Alternative: look for current page + 1
-      const currentPageNum = this.currentPage;
-      const nextPageButton = document.querySelector(`[aria-label="Page ${currentPageNum + 1}"]`);
-      
-      if (nextPageButton) {
-        nextPageButton.click();
         return true;
       }
       
@@ -508,10 +429,9 @@ class ETAContentScript {
   async waitForPageLoad() {
     // Wait for loading indicators to disappear
     await this.waitForCondition(() => {
-      const loadingIndicators = document.querySelectorAll(
-        '.ms-Spinner, .loading, [aria-label*="Loading"], [aria-label*="جاري التحميل"]'
-      );
-      return loadingIndicators.length === 0;
+      const loadingIndicators = document.querySelectorAll('.LoadingIndicator, .ms-Spinner');
+      return loadingIndicators.length === 0 || 
+             Array.from(loadingIndicators).every(el => el.style.display === 'none' || !el.offsetParent);
     }, 10000);
     
     // Wait for invoice rows to appear
@@ -547,8 +467,9 @@ class ETAContentScript {
   
   async getInvoiceDetails(invoiceId) {
     try {
-      // Use API call instead of page navigation
-      const details = await this.fetchInvoiceDetailsViaAPI(invoiceId);
+      // Extract invoice details from the details view
+      // This would be called when user clicks on an invoice link
+      const details = await this.extractInvoiceDetailsFromPage(invoiceId);
       
       return {
         success: true,
@@ -556,271 +477,70 @@ class ETAContentScript {
       };
     } catch (error) {
       console.error('Error getting invoice details:', error);
-      return { success: false, data: [] };
-    }
-  }
-  
-  async fetchInvoiceDetailsViaAPI(invoiceId) {
-    try {
-      // Method 1: Try to fetch from the API endpoint
-      const apiUrl = `https://invoicing.eta.gov.eg/api/v1/documents/${invoiceId}`;
-      
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          // Copy existing session cookies
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        return this.parseAPIInvoiceDetails(data);
-      }
-      
-      // Method 2: Try alternative endpoint
-      return await this.fetchInvoiceDetailsAlternative(invoiceId);
-      
-    } catch (error) {
-      console.warn('API fetch failed, trying alternative method:', error);
-      return await this.fetchInvoiceDetailsAlternative(invoiceId);
-    }
-  }
-  
-  async fetchInvoiceDetailsAlternative(invoiceId) {
-    try {
-      // Method 3: Use iframe to load details without affecting main page
-      return await this.fetchInvoiceDetailsViaIframe(invoiceId);
-    } catch (error) {
-      console.warn('Iframe method failed, extracting from current page data:', error);
-      return this.extractDetailsFromCurrentPageData(invoiceId);
-    }
-  }
-  
-  async fetchInvoiceDetailsViaIframe(invoiceId) {
-    return new Promise((resolve, reject) => {
-      // Create hidden iframe
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.style.width = '0px';
-      iframe.style.height = '0px';
-      
-      const detailsUrl = `https://invoicing.eta.gov.eg/documents/${invoiceId}`;
-      
-      iframe.onload = () => {
-        try {
-          // Wait a bit for content to load
-          setTimeout(() => {
-            try {
-              const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-              const details = this.extractInvoiceDetailsFromDocument(iframeDoc);
-              
-              // Clean up
-              document.body.removeChild(iframe);
-              resolve(details);
-            } catch (error) {
-              document.body.removeChild(iframe);
-              reject(error);
-            }
-          }, 2000);
-        } catch (error) {
-          document.body.removeChild(iframe);
-          reject(error);
-        }
+      return { 
+        success: false, 
+        data: [],
+        error: error.message 
       };
-      
-      iframe.onerror = () => {
-        document.body.removeChild(iframe);
-        reject(new Error('Failed to load iframe'));
-      };
-      
-      // Add to page and load
-      document.body.appendChild(iframe);
-      iframe.src = detailsUrl;
-      
-      // Timeout after 10 seconds
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-          reject(new Error('Iframe timeout'));
-        }
-      }, 10000);
-    });
+    }
   }
   
-  parseAPIInvoiceDetails(apiData) {
+  async extractInvoiceDetailsFromPage(invoiceId) {
+    // This method would extract line items from the invoice details page
+    // Based on the second image showing the detailed view with columns:
+    // كود الصنف, إسم الكود, الوصف, الكمية, كود الوحدة, إسم الوحدة, السعر, القيمة, ضريبة القيمة المضافة, الإجمالي
+    
     const details = [];
     
     try {
-      // Parse API response structure
-      if (apiData.invoiceLines && Array.isArray(apiData.invoiceLines)) {
-        apiData.invoiceLines.forEach(line => {
+      // Look for the details table in the invoice view
+      const detailsTable = document.querySelector('.ms-DetailsList, [data-automationid="DetailsList"]');
+      
+      if (detailsTable) {
+        const rows = detailsTable.querySelectorAll('.ms-DetailsRow[role="row"]');
+        
+        rows.forEach((row, index) => {
+          const cells = row.querySelectorAll('.ms-DetailsRow-cell');
+          
+          if (cells.length >= 10) { // Based on the 10 columns shown in the image
+            const item = {
+              itemCode: this.extractCellText(cells[0]) || '', // كود الصنف
+              codeName: this.extractCellText(cells[1]) || '', // إسم الكود
+              description: this.extractCellText(cells[2]) || '', // الوصف
+              quantity: this.extractCellText(cells[3]) || '1', // الكمية
+              unitCode: this.extractCellText(cells[4]) || 'EA', // كود الوحدة
+              unitName: this.extractCellText(cells[5]) || 'قطعة', // إسم الوحدة
+              unitPrice: this.extractCellText(cells[6]) || '0', // السعر
+              totalValue: this.extractCellText(cells[7]) || '0', // القيمة
+              vatAmount: this.extractCellText(cells[8]) || '0', // ضريبة القيمة المضافة
+              totalWithVat: this.extractCellText(cells[9]) || '0' // الإجمالي
+            };
+            
+            // Only add valid items (skip header rows)
+            if (item.description && item.description !== 'الوصف') {
+              details.push(item);
+            }
+          }
+        });
+      }
+      
+      // If no detailed items found, create a summary item
+      if (details.length === 0) {
+        const invoice = this.invoiceData.find(inv => inv.electronicNumber === invoiceId);
+        if (invoice) {
           details.push({
-            itemName: line.description || line.itemName || '',
-            unitCode: line.unitType?.code || 'EA',
-            unitName: line.unitType?.name || 'قطعة',
-            quantity: line.quantity || '1',
-            unitPrice: line.unitValue?.amount || '0',
-            totalValue: line.salesTotal || '0',
-            vatAmount: line.taxTotals?.find(tax => tax.taxType === 'T1')?.amount || '0',
-            totalWithVat: line.netTotal || '0'
+            itemCode: 'SUMMARY',
+            codeName: 'إجمالي',
+            description: 'إجمالي الفاتورة',
+            quantity: '1',
+            unitCode: 'EA',
+            unitName: 'قطعة',
+            unitPrice: invoice.totalAmount || '0',
+            totalValue: invoice.invoiceValue || invoice.totalAmount || '0',
+            vatAmount: invoice.vatAmount || '0',
+            totalWithVat: invoice.totalAmount || '0'
           });
-        });
-      }
-      
-      // If no line items, create summary item
-      if (details.length === 0 && apiData.totalAmount) {
-        details.push({
-          itemName: 'إجمالي الفاتورة',
-          unitCode: 'EA',
-          unitName: 'قطعة',
-          quantity: '1',
-          unitPrice: apiData.totalAmount,
-          totalValue: apiData.totalAmount,
-          vatAmount: this.calculateVAT(apiData.totalAmount),
-          totalWithVat: apiData.totalAmount
-        });
-      }
-      
-    } catch (error) {
-      console.error('Error parsing API data:', error);
-    }
-    
-    return details;
-  }
-  
-  extractInvoiceDetailsFromDocument(doc) {
-    const details = [];
-    
-    try {
-      // Look for invoice line items table in the document
-      const itemsTable = doc.querySelector('.invoice-items-table, .ms-DetailsList, [data-automation-id="DetailsList"]');
-      
-      if (itemsTable) {
-        const rows = itemsTable.querySelectorAll('.ms-DetailsRow[role="row"], tr');
-        
-        rows.forEach(row => {
-          const cells = row.querySelectorAll('.ms-DetailsRow-cell, td');
-          
-          if (cells.length >= 6) {
-            const item = {
-              itemName: this.extractCellText(cells[0]) || '',
-              unitCode: this.extractCellText(cells[1]) || 'EA',
-              unitName: this.extractCellText(cells[2]) || 'قطعة',
-              quantity: this.extractCellText(cells[3]) || '1',
-              unitPrice: this.extractCellText(cells[4]) || '0',
-              totalValue: this.extractCellText(cells[5]) || '0',
-              vatAmount: this.calculateVAT(this.extractCellText(cells[5])),
-              totalWithVat: this.calculateTotalWithVAT(this.extractCellText(cells[5]))
-            };
-            
-            if (item.itemName && item.itemName !== 'اسم الصنف') {
-              details.push(item);
-            }
-          }
-        });
-      }
-      
-      // If no items found, try to extract from summary
-      if (details.length === 0) {
-        const summaryData = this.extractSummaryFromDocument(doc);
-        details.push(...summaryData);
-      }
-      
-    } catch (error) {
-      console.error('Error extracting from document:', error);
-    }
-    
-    return details;
-  }
-  
-  extractDetailsFromCurrentPageData(invoiceId) {
-    // Extract what we can from the current page data
-    const invoice = this.invoiceData.find(inv => inv.electronicNumber === invoiceId);
-    
-    if (!invoice) {
-      return [];
-    }
-    
-    // Create a summary item based on available data
-    return [{
-      itemName: 'إجمالي الفاتورة',
-      unitCode: 'EA',
-      unitName: 'قطعة',
-      quantity: '1',
-      unitPrice: invoice.totalInvoice || '0',
-      totalValue: invoice.invoiceValue || invoice.totalInvoice || '0',
-      vatAmount: invoice.vatAmount || this.calculateVAT(invoice.totalInvoice),
-      totalWithVat: invoice.totalInvoice || '0'
-    }];
-  }
-  
-  extractSummaryFromDocument(doc) {
-    const summaryItems = [];
-    
-    try {
-      // Extract basic invoice info as a single line item
-      const totalElement = doc.querySelector('[data-automation-key="total"] .griCellTitleGray, .total-amount');
-      const total = totalElement?.textContent?.trim() || '0';
-      
-      if (parseFloat(total.replace(/,/g, '')) > 0) {
-        summaryItems.push({
-          itemName: 'إجمالي الفاتورة',
-          unitCode: 'EA',
-          unitName: 'قطعة',
-          quantity: '1',
-          unitPrice: total,
-          totalValue: total,
-          vatAmount: this.calculateVAT(total),
-          totalWithVat: total
-        });
-      }
-    } catch (error) {
-      console.error('Error extracting summary from document:', error);
-    }
-    
-    return summaryItems;
-  }
-  
-  extractInvoiceDetailsFromPage() {
-    const details = [];
-    
-    try {
-      // Look for invoice line items table
-      const itemsTable = document.querySelector('.invoice-items-table, .ms-DetailsList, [data-automation-id="DetailsList"]');
-      
-      if (itemsTable) {
-        const rows = itemsTable.querySelectorAll('.ms-DetailsRow[role="row"], tr');
-        
-        rows.forEach(row => {
-          const cells = row.querySelectorAll('.ms-DetailsRow-cell, td');
-          
-          if (cells.length >= 6) {
-            const item = {
-              itemName: this.extractCellText(cells[0]) || '',
-              unitCode: this.extractCellText(cells[1]) || 'EA',
-              unitName: this.extractCellText(cells[2]) || 'قطعة',
-              quantity: this.extractCellText(cells[3]) || '1',
-              unitPrice: this.extractCellText(cells[4]) || '0',
-              totalValue: this.extractCellText(cells[5]) || '0',
-              vatAmount: this.calculateVAT(this.extractCellText(cells[5])),
-              totalWithVat: this.calculateTotalWithVAT(this.extractCellText(cells[5]))
-            };
-            
-            if (item.itemName && item.itemName !== 'اسم الصنف') {
-              details.push(item);
-            }
-          }
-        });
-      }
-      
-      // If no items found in table, try to extract from summary
-      if (details.length === 0) {
-        const summaryData = this.extractSummaryAsItems();
-        details.push(...summaryData);
+        }
       }
       
     } catch (error) {
@@ -836,46 +556,6 @@ class ETAContentScript {
     // Try different selectors for cell content
     const textElement = cell.querySelector('.griCellTitle, .griCellTitleGray, .ms-DetailsRow-cellContent') || cell;
     return textElement.textContent?.trim() || '';
-  }
-  
-  calculateVAT(totalValue) {
-    const value = parseFloat(totalValue?.replace(/,/g, '') || 0);
-    // Assuming 14% VAT rate (common in Egypt)
-    return (value * 0.14 / 1.14).toFixed(2);
-  }
-  
-  calculateTotalWithVAT(baseValue) {
-    const value = parseFloat(baseValue?.replace(/,/g, '') || 0);
-    const vat = parseFloat(this.calculateVAT(baseValue));
-    return (value + vat).toFixed(2);
-  }
-  
-  extractSummaryAsItems() {
-    // If detailed items are not available, create a summary item
-    const summaryItems = [];
-    
-    try {
-      // Extract basic invoice info as a single line item
-      const totalElement = document.querySelector('[data-automation-key="total"] .griCellTitleGray');
-      const total = totalElement?.textContent?.trim() || '0';
-      
-      if (parseFloat(total.replace(/,/g, '')) > 0) {
-        summaryItems.push({
-          itemName: 'إجمالي الفاتورة',
-          unitCode: 'EA',
-          unitName: 'قطعة',
-          quantity: '1',
-          unitPrice: total,
-          totalValue: total,
-          vatAmount: this.calculateVAT(total),
-          totalWithVat: total
-        });
-      }
-    } catch (error) {
-      console.error('Error extracting summary items:', error);
-    }
-    
-    return summaryItems;
   }
   
   getInvoiceData() {
